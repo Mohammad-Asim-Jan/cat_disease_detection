@@ -17,8 +17,9 @@ class _PetProfileEditState extends State<PetProfileEdit> {
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.petProfile.name);
-    _ageController = TextEditingController(text: widget.petProfile.age);
+    _nameController = TextEditingController(text: widget.petProfile.catName);
+    _ageController =
+        TextEditingController(text: widget.petProfile.catAge.toString());
   }
 
   @override
@@ -50,14 +51,7 @@ class _PetProfileEditState extends State<PetProfileEdit> {
             ElevatedButton(
               onPressed: () {
                 // Pass updated pet profile back
-                Navigator.pop(
-                  context,
-                  PetProfile(
-                    name: _nameController.text,
-                    age: _ageController.text,
-                    photo: widget.petProfile.photo, // Keep the photo same
-                  ),
-                );
+                Navigator.pop(context);
               },
               child: const Text('Save'),
             ),

@@ -4,7 +4,7 @@ class UserProfile {
   String userId;
   String userName;
   String userEmail;
-  File? userPicture;
+  String? userPicture;
 
   UserProfile({
     required this.userId,

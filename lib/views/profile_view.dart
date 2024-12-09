@@ -1,11 +1,9 @@
 import 'dart:io';
+import 'package:cat_disease_detection/view_models/profile_view_model.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../models/pet_profile_model.dart';
-import '../models/user_profile_model.dart';
+import '../utils/show_snack_bar.dart';
 
 class ProfileView extends StatefulWidget {
   const ProfileView({super.key});
@@ -15,66 +13,19 @@ class ProfileView extends StatefulWidget {
 }
 
 class _ProfileViewState extends State<ProfileView> {
-  late UserProfile _userProfile;
-  late UserProfile _userProfile;
+  ProfileViewModel profileViewModel = ProfileViewModel();
+  bool _loading = true;
 
-  late List<PetProfile> _petProfiles;
   bool _isDarkMode = false;
-  File? _image;
 
   @override
   void initState() {
     super.initState();
+    getDataFromSupabase();
 
+    /// getPets
 
-    String? email = Supabase.instance.client.auth.currentUser?.email;
-
-    /// todo: check if the user name is already there, then don't get name from email
-    String name = email == null ? 'example' : extractUsername(email);
-
-    getUserProfileImageFromDirectory();
-
-    // Initialize user profile
-    _userProfile = UserProfile(
-      userId: '1',
-      userName: name.toUpperCase(),
-      userEmail: email ?? 'example@gmail.com',
-      userPicture: _image, // Placeholder image
-    );
-
-    // Initialize list of pet profiles
-    _petProfiles = [
-      PetProfile(name: "Max", age: "2 years", photo: null),
-      PetProfile(name: "Bella", age: "3 years", photo: null),
-    ];
-
-    // Load theme mode from shared preferences
     _loadTheme();
-  }
-
-  getUserProfileImageFromDirectory() async {
-    // Get the path to save the image
-    final String imagePath = await _getImageStoragePath();
-
-    // Delete the previous image if it exists
-    _image = File(imagePath);
-    // setState(() {
-    //   _userProfile.profilePicture = _image;
-    // });
-  }
-
-  // Get the name from the email address
-  String extractUsername(String email) {
-    // Find the index of the '@' character
-    int atIndex = email.indexOf('@');
-
-    // If the '@' character is found, return the substring before it
-    if (atIndex != -1) {
-      return email.substring(0, atIndex);
-    }
-
-    // Return an empty string if the email format is invalid
-    return '';
   }
 
   // Toggle between dark and light mode
@@ -105,11 +56,9 @@ class _ProfileViewState extends State<ProfileView> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
+              TextFormField(
+                controller: profileViewModel.nameC,
                 decoration: const InputDecoration(labelText: "Name"),
-                onChanged: (value) {
-                  _userProfile.userName = value;
-                },
               ),
               // TextField(
               //   decoration: const InputDecoration(labelText: "Email"),
@@ -122,11 +71,9 @@ class _ProfileViewState extends State<ProfileView> {
           ),
           actions: [
             ElevatedButton(
-              onPressed: () {
-                // Save changes
-                setState(() {
-                  // Persist changes or save to a database
-                });
+              onPressed: () async {
+                await profileViewModel.updateUser(context);
+                setState(() {});
                 Navigator.pop(context);
               },
               child: const Text("Save"),
@@ -137,228 +84,61 @@ class _ProfileViewState extends State<ProfileView> {
     );
   }
 
-  // Function to add a new pet profile
-  void _addPetProfile() {
-    // Show a dialog to add pet details
-    showDialog(
-      context: context,
-      builder: (context) {
-        String petName = '';
-        String petAge = '';
-        String petPhoto = 'assets/images/default_pet.png'; // Default pet image
+  getDataFromSupabase() async {
+    profileViewModel.userProfile = await profileViewModel.getUserProfile();
+    await profileViewModel.getCatProfiles();
+    debugPrint('User Name: ${profileViewModel.userProfile.userName}');
+    debugPrint('User email: ${profileViewModel.userProfile.userEmail}');
 
-        return AlertDialog(
-          title: const Text("Add New Pet"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                decoration: const InputDecoration(labelText: "Pet Name"),
-                onChanged: (value) {
-                  petName = value;
-                },
-              ),
-              TextField(
-                decoration: const InputDecoration(labelText: "Pet Age"),
-                onChanged: (value) {
-                  petAge = value;
-                },
-              ),
-              // Add input for photo or use default
-            ],
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () {
-                // Add new pet to the list
-                setState(() {
-                  _petProfiles.add(PetProfile(
-                    name: petName,
-                    age: petAge,
-                    photo: petPhoto,
-                  ));
-                });
-                Navigator.pop(context);
-              },
-              child: const Text("Add"),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // Function to edit an existing pet profile
-  void _editPetProfile(PetProfile pet) {
-    // Display a dialog to edit pet details
-    showDialog(
-      context: context,
-      builder: (context) {
-        String petName = pet.name;
-        String petAge = pet.age;
-        String? petPhoto = pet.photo;
-
-        return AlertDialog(
-          title: const Text("Edit Pet Profile"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                decoration: const InputDecoration(labelText: "Pet Name"),
-                controller: TextEditingController(text: petName),
-                onChanged: (value) {
-                  petName = value;
-                },
-              ),
-              TextField(
-                decoration: const InputDecoration(labelText: "Pet Age"),
-                controller: TextEditingController(text: petAge),
-                onChanged: (value) {
-                  petAge = value;
-                },
-              ),
-              // Optionally allow changing photo
-            ],
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () {
-                // Save changes to pet profile
-                setState(() {
-                  pet.name = petName;
-                  pet.age = petAge;
-                  pet.photo = petPhoto; // Update the photo if allowed
-                });
-                Navigator.pop(context);
-              },
-              child: const Text("Save"),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // Function to delete a pet profile
-  void _deletePetProfile(PetProfile pet) {
     setState(() {
-      _petProfiles.remove(pet);
+      _loading = false;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // User Profile Section
-            _buildUserProfileSection(),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // User Profile Section
+                  _buildUserProfileSection(),
 
-            const SizedBox(height: 6.0),
-            const Divider(
-              thickness: 2.3,
-              color: Colors.grey,
+                  const SizedBox(height: 6.0),
+                  const Divider(
+                    thickness: 2.3,
+                    color: Colors.grey,
+                  ),
+                  const SizedBox(height: 16.0),
+
+                  // Pet Profiles Section
+                  _buildPetProfilesSection(),
+
+                  const SizedBox(height: 16.0),
+
+                  // Dark Mode Toggle
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text("Dark Mode"),
+                      Switch(
+                        value: _isDarkMode,
+                        onChanged: (value) {
+                          _toggleTheme();
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 16.0),
-
-            // Pet Profiles Section
-            _buildPetProfilesSection(),
-
-            const SizedBox(height: 16.0),
-
-            // Dark Mode Toggle
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text("Dark Mode"),
-                Switch(
-                  value: _isDarkMode,
-                  onChanged: (value) {
-                    _toggleTheme();
-                  },
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 
-  // Pick an image from the gallery or camera
-  Future<void> _pickImage() async {
-    final ImagePicker _picker = ImagePicker();
-    final XFile? pickedFile =
-        await _picker.pickImage(source: ImageSource.gallery);
-
-    if (pickedFile != null) {
-      // Get the path to save the image
-      final String imagePath = await _getImageStoragePath();
-
-      // Delete the previous image if it exists
-      final File previousImage = File(imagePath);
-      if (previousImage.existsSync()) {
-        await previousImage.delete();
-        print("Previous image deleted.");
-      }
-
-      // Save the new image to the same path
-      final File newImage = File(imagePath);
-      await pickedFile.saveTo(newImage.path);
-
-      setState(() {
-        _image = newImage;
-        _userProfile.userPicture = _image;
-      });
-
-      print("Image saved to: ${newImage.path}");
-    }
-  }
-
-  // Get the path where you want to store the image
-  Future<String> _getImageStoragePath() async {
-    final directory = await getApplicationDocumentsDirectory();
-    return '${directory.path}/profile_image.jpg'; // You can choose your own file name
-  }
-
-  // // Pick an image from the gallery or camera
-  // Future<void> _pickImage() async {
-  //   final ImagePicker _picker = ImagePicker();
-  //   final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-  //   if (pickedFile != null) {
-  //     setState(() {
-  //       _image = File(pickedFile.path);
-  //       _userProfile.profilePicture = _image;
-  //     });
-  //
-  //     // Save the image to local storage
-  //     await _saveImage(pickedFile);
-  //   }
-  // }
-  //
-  // // Save the image to the app's document directory
-  // Future<void> _saveImage(XFile pickedFile) async {
-  //   try {
-  //     // Get the application's documents directory
-  //     final directory = await getApplicationDocumentsDirectory();
-  //
-  //     // Create a file path to save the image
-  //     final filePath = '${directory.path}/${pickedFile.name}';
-  //     final File localFile = File(filePath);
-  //
-  //     // Copy the picked image to the local file
-  //     await pickedFile.saveTo(localFile.path);
-  //
-  //     print("Image saved to: ${localFile.path}");
-  //   } catch (e) {
-  //     print("Error saving image: $e");
-  //   }
-  // }
-
-  // Build the user profile section
   Widget _buildUserProfileSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -368,13 +148,24 @@ class _ProfileViewState extends State<ProfileView> {
         const SizedBox(height: 10),
         ListTile(
           leading: GestureDetector(
-            onTap: _pickImage,
+            onTap: () async {
+              await profileViewModel.uploadUserImageToSupabase(context);
+              setState(() {
+                debugPrint('User picture url:');
+                debugPrint(profileViewModel.userProfile.userPicture);
+                // _image = profileViewModel.newImage;
+                // _userProfile.userPicture = _image;
+              });
+            },
             child: CircleAvatar(
-              backgroundImage: _userProfile.userPicture == null
+              backgroundImage: profileViewModel.userProfile.userPicture == null
                   ? null
-                  : FileImage(_userProfile.userPicture!),
+                  : NetworkImage(
+                      '${profileViewModel.userProfile.userPicture!}?timestamp=${DateTime.now().millisecondsSinceEpoch}',
+                      // profileViewModel.userProfile.userPicture!
+                    ),
               radius: 30,
-              child: _userProfile.userPicture == null
+              child: profileViewModel.userProfile.userPicture == null
                   ? const Icon(
                       Icons.person,
                       size: 35,
@@ -382,8 +173,8 @@ class _ProfileViewState extends State<ProfileView> {
                   : null,
             ),
           ),
-          title: Text(_userProfile.userName),
-          subtitle: Text(_userProfile.userEmail),
+          title: Text(profileViewModel.userProfile.userName),
+          subtitle: Text(profileViewModel.userProfile.userEmail),
           trailing: IconButton(
             icon: const Icon(Icons.edit),
             onPressed: _editUserProfile, // Edit user profile
@@ -402,51 +193,204 @@ class _ProfileViewState extends State<ProfileView> {
           const Text("Pet Profiles",
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
-          Expanded(
-            child: ListView.builder(
-              itemCount: _petProfiles.length,
-              itemBuilder: (context, index) {
-                final pet = _petProfiles[index];
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundImage:
-                        pet.photo == null ? null : AssetImage(pet.photo!),
-                    radius: 30,
-                    child: pet.photo == null
-                        ? const Icon(
-                            Icons.person,
-                            size: 35,
-                          )
-                        : null,
+          profileViewModel.petProfiles.isEmpty
+              ? const Center(child: Text('No cat profile!\n'))
+              : Expanded(
+                  child: ListView.builder(
+                    itemCount: profileViewModel.petProfiles.length,
+                    itemBuilder: (context, index) {
+                      final pet = profileViewModel.petProfiles[index];
+                      return ListTile(
+                        leading: GestureDetector(
+                          onTap: () async {
+                            await profileViewModel.uploadCatImageToSupabase(
+                                context, index);
+                            setState(() {
+                              debugPrint('Cat picture url:');
+                              debugPrint(
+                                  profileViewModel.petProfiles[index].catImage);
+                              // _image = profileViewModel.newImage;
+                              // _userProfile.userPicture = _image;
+                            });
+                          },
+                          child: CircleAvatar(
+                            backgroundImage: pet.catImage == null
+                                ? null
+                                : NetworkImage(
+                                    '${pet.catImage!}?timestamp=${DateTime.now().millisecondsSinceEpoch}'),
+                            radius: 30,
+                            child: pet.catImage == null
+                                ? const Icon(
+                                    Icons.person,
+                                    size: 35,
+                                  )
+                                : null,
+                          ),
+                        ),
+                        title: Text(pet.catName),
+                        subtitle: Text(pet.catAge.toString()),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                                icon: const Icon(Icons.edit),
+                                onPressed: () {
+                                  editPetProfile(context, index);
+                                  setState(() {
+                                    // Edit pet profile
+                                  });
+                                }),
+                            IconButton(
+                                icon: const Icon(Icons.delete),
+                                onPressed: () async {
+                                  await profileViewModel.deletePetProfile(
+                                      index); // Delete pet profile
+                                  setState(() {});
+                                }),
+                          ],
+                        ),
+                      );
+                    },
                   ),
-                  title: Text(pet.name),
-                  subtitle: Text(pet.age),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit),
-                        onPressed: () =>
-                            _editPetProfile(pet), // Edit pet profile
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete),
-                        onPressed: () =>
-                            _deletePetProfile(pet), // Delete pet profile
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
+                ),
           ElevatedButton.icon(
-            icon: const Icon(Icons.add),
-            label: const Text("Add Pet"),
-            onPressed: _addPetProfile, // Add new pet
-          ),
+              icon: const Icon(Icons.add),
+              label: const Text("Add Pet"),
+              onPressed: () {
+                addPetProfile(context);
+              }
+              // Add new pet
+              ),
         ],
       ),
+    );
+  }
+
+  // Function to edit an existing pet profile
+  void editPetProfile(BuildContext context, int index) async {
+    String petName = profileViewModel.petProfiles[index].catName;
+    int? petAge = profileViewModel.petProfiles[index].catAge;
+
+    TextEditingController nameC = TextEditingController(text: petName);
+    TextEditingController ageC = TextEditingController(text: petAge.toString());
+
+    // Display a dialog to edit pet details
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Edit Cat Profile"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                decoration: const InputDecoration(labelText: "Cat Name"),
+                controller: nameC,
+                onChanged: (value) {
+                  petName = value;
+                },
+              ),
+              TextField(
+                decoration: const InputDecoration(labelText: "Cat Age"),
+                controller: ageC,
+                onChanged: (value) {
+                  petAge = int.tryParse(value);
+                },
+              ),
+              // Optionally allow changing photo
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () async {
+                await Supabase.instance.client
+                    .from('catProfile')
+                    .update({'catName': petName, 'catAge': petAge})
+                    .eq('catId', profileViewModel.petProfiles[index].catId)
+                    .then(
+                      (value) {
+                        ShowSnackBar.getSnackBar(
+                            context, 'Cat updated successfully!');
+                        // Save changes to pet profile
+                        setState(() {
+                          profileViewModel.petProfiles[index].catName = petName;
+                          profileViewModel.petProfiles[index].catAge =
+                              petAge ?? 0;
+                        });
+                      },
+                    )
+                    .onError(
+                      (error, stackTrace) {
+                        ShowSnackBar.getSnackBar(context, '$error');
+                      },
+                    );
+                Navigator.pop(context);
+              },
+              child: const Text("Save"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Function to add a new pet profile
+  void addPetProfile(BuildContext context) {
+    // Show a dialog to add pet details
+    showDialog(
+      context: context,
+      builder: (context) {
+        String petName = '';
+        String petAge = ''; // Default pet image
+
+        return AlertDialog(
+          title: const Text("Add New Cat"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                decoration: const InputDecoration(labelText: "Cat Name"),
+                onChanged: (value) {
+                  petName = value;
+                },
+              ),
+              TextField(
+                decoration: const InputDecoration(labelText: "Cat Age"),
+                onChanged: (value) {
+                  petAge = value;
+                },
+              ),
+              // Add input for photo or use default
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () async {
+                String userId = Supabase.instance.client.auth.currentUser!.id;
+                final response =
+                    await Supabase.instance.client.from('catProfile').insert({
+                  'userId': userId,
+                  'catName': petName,
+                  'catAge': petAge,
+                  'catImage': null,
+                });
+
+                if (response == null) {
+                  await profileViewModel.getCatProfiles();
+                  setState(() {});
+                  ShowSnackBar.getSnackBar(
+                      context, 'Profile added successfully!');
+                } else {
+                  ShowSnackBar.getSnackBar(
+                      context, 'Error: ${response.error!.message}');
+                }
+                Navigator.pop(context);
+              },
+              child: const Text("Add"),
+            ),
+          ],
+        );
+      },
     );
   }
 }
